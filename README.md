@@ -1,6 +1,6 @@
 # AnotherTerminal
 
-Un gestionnaire de connexions SSH léger, multiplateforme, minimaliste et open source.
+Un gestionnaire de connexions SSH léger, multiplateforme, minimaliste et open source, conçu pour les développeurs et administrateurs systèmes qui veulent gérer efficacement leurs serveurs depuis une interface moderne et intuitive. Il combine la puissance d’un terminal complet avec la simplicité d’un outil graphique, tout en mettant l’accent sur la sécurité, la performance et l’organisation des connexions.
 
 ![Electron](https://img.shields.io/badge/Electron-28-47848F?logo=electron)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
