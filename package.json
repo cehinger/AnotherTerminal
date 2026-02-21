@@ -1,0 +1,71 @@
+{
+  "name": "another-terminal",
+  "version": "0.1.0-alpha.1",
+  "description": "A lightweight, cross-platform SSH terminal manager inspired by Termius",
+  "main": "dist/main/main/main.js",
+  "author": "AnotherTerminal",
+  "license": "GPL-3.0",
+  "scripts": {
+    "dev": "concurrently -k \"npm run dev:renderer\" \"npm run dev:main:wait\"",
+    "dev:renderer": "vite",
+    "dev:main": "tsc -p tsconfig.main.json && NODE_ENV=development electron . --dev",
+    "dev:main:wait": "tsc -p tsconfig.main.json && sleep 3 && NODE_ENV=development electron . --dev",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build": "npm run build:renderer && npm run build:main",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:win": "npm run build && electron-builder --win"
+  },
+  "dependencies": {
+    "ssh2": "^1.16.0",
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/addon-clipboard": "^0.1.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/ssh2": "^1.15.1",
+    "@types/uuid": "^9.0.7",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "postcss": "^8.4.32",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  },
+  "build": {
+    "appId": "com.anotherterminal.app",
+    "productName": "AnotherTerminal",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.icns"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Development",
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": ["nsis", "zip"],
+      "icon": "build/icon.ico"
+    }
+  }
+}
