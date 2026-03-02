@@ -62,7 +62,6 @@
       "icon": "build/icon.icns"
     },
     "dmg": {
-      "background": "build/dmg-background.png",
       "window": {
         "width": 540,
         "height": 380
