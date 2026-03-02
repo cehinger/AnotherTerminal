@@ -10,6 +10,10 @@ if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev')) {
 
 let mainWindow: BrowserWindow | null = null;
 
+function getMainWindow(): BrowserWindow | null {
+  return mainWindow;
+}
+
 function createWindow(): void {
   const isMac = process.platform === 'darwin';
   
@@ -32,12 +36,9 @@ function createWindow(): void {
     show: false,
   });
 
-  // Register IPC handlers
-  registerIPC(mainWindow);
-
   // Load the app
   if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev')) {
-    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.loadURL('http://localhost:6173');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     mainWindow.loadFile(path.join(__dirname, '..', '..', 'renderer', 'index.html'));
@@ -61,6 +62,9 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // Register IPC handlers once for the entire app lifetime
+  registerIPC(getMainWindow);
+
   createWindow();
 
   app.on('activate', () => {

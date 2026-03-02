@@ -1,6 +1,6 @@
 {
   "name": "another-terminal",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "A lightweight, cross-platform SSH terminal manager built with Electron and React.",
   "main": "dist/main/main/main.js",
   "author": {
@@ -60,6 +60,17 @@
       "category": "public.app-category.developer-tools",
       "target": ["dmg", "zip"],
       "icon": "build/icon.icns"
+    },
+    "dmg": {
+      "background": "build/dmg-background.png",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        { "x": 130, "y": 220, "type": "file" },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
     },
     "linux": {
       "target": ["AppImage", "deb"],

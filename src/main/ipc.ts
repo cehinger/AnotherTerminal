@@ -3,7 +3,7 @@ import { IPC_CHANNELS, ServerConfig, ServerGroup } from '../shared/types';
 import * as store from './store';
 import * as ssh from './ssh';
 
-export function registerIPC(mainWindow: BrowserWindow): void {
+export function registerIPC(getMainWindow: () => BrowserWindow | null): void {
   // Server management
   ipcMain.handle(IPC_CHANNELS.GET_SERVERS, () => {
     return store.getServers();
@@ -68,15 +68,17 @@ export function registerIPC(mainWindow: BrowserWindow): void {
 
   // SSH events -> Renderer
   ssh.setOnData((sessionId, data) => {
+    const mainWindow = getMainWindow();
     console.log(`[IPC] Sending SSH data to renderer: session=${sessionId}, bytes=${data.length}`);
-    if (!mainWindow.isDestroyed()) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC_CHANNELS.SSH_DATA, sessionId, data);
     }
   });
 
   ssh.setOnStatus((sessionId, status, error) => {
+    const mainWindow = getMainWindow();
     console.log(`[IPC] Sending SSH status to renderer: session=${sessionId}, status=${status}`);
-    if (!mainWindow.isDestroyed()) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC_CHANNELS.SSH_STATUS, sessionId, status, error);
     }
   });
@@ -127,7 +129,7 @@ export function registerIPC(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC_CHANNELS.SELECT_FILE, async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const result = await dialog.showOpenDialog(getMainWindow()!, {
       properties: ['openFile'],
       filters: [
         { name: 'SSH Keys', extensions: ['pem', 'key', 'pub', 'ppk'] },
@@ -142,18 +144,19 @@ export function registerIPC(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC_CHANNELS.WINDOW_MINIMIZE, () => {
-    mainWindow.minimize();
+    getMainWindow()?.minimize();
   });
 
   ipcMain.handle(IPC_CHANNELS.WINDOW_MAXIMIZE, () => {
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize();
+    const win = getMainWindow();
+    if (win?.isMaximized()) {
+      win.unmaximize();
     } else {
-      mainWindow.maximize();
+      win?.maximize();
     }
   });
 
   ipcMain.handle(IPC_CHANNELS.WINDOW_CLOSE, () => {
-    mainWindow.close();
+    getMainWindow()?.close();
   });
 }
