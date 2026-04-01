@@ -208,7 +208,7 @@ Les contributions sont les bienvenues ! N'hésitez pas à :
 ## 📋 Roadmap (par ordre de priorité)
 
 ### Majeur
-- [ ] Split panes pour des terminaux côte à côté
+- [✔] Split panes pour des terminaux côte à côté
 - [ ] Recherche de chaîne de caractère dans le terminal (Ctrl+F)
 - [ ] SFTP : interface visuelle de gestion de fichiers (au lieu du mode CLI actuel)
 
