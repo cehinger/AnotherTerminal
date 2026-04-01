@@ -5,7 +5,7 @@ Un gestionnaire de connexions SSH léger, multiplateforme, minimaliste et open s
 ![Electron](https://img.shields.io/badge/Electron-28-47848F?logo=electron)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?logo=typescript)
-![Version](https://img.shields.io/badge/version-0.1.0--alpha.1-orange)
+![Version](https://img.shields.io/badge/version-0.2.0--alpha.1-orange)
 ![License](https://img.shields.io/badge/License-GPL--3.0-blue)
 
 ## Fonctionnalités

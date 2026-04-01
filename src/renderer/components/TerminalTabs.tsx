@@ -5,31 +5,77 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { TerminalTab } from '../App';
 
 interface TerminalTabsProps {
+  paneId: string;
   tabs: TerminalTab[];
   activeTabId: string | null;
   onSelectTab: (id: string) => void;
   onCloseTab: (id: string) => void;
+  isPaneActive: boolean;
+  onTabDragStart: (tabId: string, label: string, e: React.MouseEvent) => void;
+  onClosePane: () => void;
+  canClosePane: boolean;
+  tabInsertIndex: number | null;
+  draggingTabId: string | null;
+  isDragging: boolean;
 }
 
-export default function TerminalTabs({ tabs, activeTabId, onSelectTab, onCloseTab }: TerminalTabsProps) {
+export default function TerminalTabs({
+  paneId,
+  tabs,
+  activeTabId,
+  onSelectTab,
+  onCloseTab,
+  isPaneActive,
+  onTabDragStart,
+  onClosePane,
+  canClosePane,
+  tabInsertIndex,
+  draggingTabId,
+}: TerminalTabsProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Tab bar */}
-      {tabs.length > 0 && (
-        <div className="flex items-center bg-dark-900 border-b border-dark-700 shrink-0 overflow-x-auto">
-          <div className="drag-region w-full flex items-center min-h-[40px]">
-            {tabs.map(tab => (
+      <div
+        className={`flex items-center bg-dark-900 border-b shrink-0 ${
+          isPaneActive ? 'border-indigo-500' : 'border-dark-700'
+        }`}
+      >
+        {/* Zone des onglets — data-tab-bar-pane utilisé pour le hit-test drag */}
+        <div
+          data-tab-bar-pane={paneId}
+          className="drag-region flex items-center min-h-[40px] flex-1 min-w-0 overflow-x-auto"
+        >
+          {tabs.map((tab, i) => (
+            <React.Fragment key={tab.id}>
+              {tabInsertIndex === i && <InsertIndicator />}
               <TabButton
-                key={tab.id}
                 tab={tab}
                 isActive={tab.id === activeTabId}
+                isDragging={tab.id === draggingTabId}
                 onSelect={() => onSelectTab(tab.id)}
                 onClose={() => onCloseTab(tab.id)}
+                onDragStart={e => onTabDragStart(tab.id, tab.serverAlias, e)}
               />
-            ))}
-          </div>
+            </React.Fragment>
+          ))}
+          {tabInsertIndex === tabs.length && <InsertIndicator />}
         </div>
-      )}
+
+        {/* Contrôle : fermer le pane */}
+        <div className="no-drag flex items-center gap-0.5 px-1.5 shrink-0 border-l border-dark-700">
+          {canClosePane && (
+            <button
+              onClick={onClosePane}
+              title="Fermer le panneau"
+              className="p-1.5 rounded text-gray-500 hover:text-red-400 hover:bg-dark-700 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Terminal area */}
       <div className="flex-1 relative bg-dark-950" style={{ minHeight: 0 }}>
@@ -49,16 +95,24 @@ export default function TerminalTabs({ tabs, activeTabId, onSelectTab, onCloseTa
   );
 }
 
+function InsertIndicator() {
+  return <div className="w-0.5 h-5 bg-indigo-400 shrink-0 rounded-full self-center mx-0.5 pointer-events-none" />;
+}
+
 function TabButton({
   tab,
   isActive,
+  isDragging,
   onSelect,
   onClose,
+  onDragStart,
 }: {
   tab: TerminalTab;
   isActive: boolean;
+  isDragging: boolean;
   onSelect: () => void;
   onClose: () => void;
+  onDragStart: (e: React.MouseEvent) => void;
 }) {
   const statusColor = {
     connecting: 'bg-yellow-500',
@@ -69,17 +123,22 @@ function TabButton({
 
   return (
     <div
-      className={`no-drag flex items-center gap-2 px-3 py-2 border-r border-dark-700 cursor-pointer group transition-colors min-w-0 max-w-[200px] ${
+      data-tab-id={tab.id}
+      className={`no-drag flex items-center gap-2 px-3 py-2 border-r border-dark-700 cursor-grab group transition-all select-none min-w-0 max-w-[200px] ${
+        isDragging ? 'opacity-40' : ''
+      } ${
         isActive
           ? 'bg-dark-950 text-gray-100'
           : 'bg-dark-900 text-gray-400 hover:bg-dark-800 hover:text-gray-200'
       }`}
       onClick={onSelect}
+      onMouseDown={onDragStart}
     >
       <span className={`w-2 h-2 rounded-full shrink-0 ${statusColor}`} />
       <span className="text-xs font-medium truncate">{tab.serverAlias}</span>
       <button
         onClick={e => { e.stopPropagation(); onClose(); }}
+        onMouseDown={e => e.stopPropagation()}
         className="ml-auto p-0.5 rounded hover:bg-dark-600 text-gray-500 hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-all shrink-0"
       >
         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

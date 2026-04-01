@@ -78,10 +78,24 @@ export default function Sidebar({
         }`}
       >
         {/* Header */}
-        <div className="drag-region h-10 flex items-center justify-end px-3 shrink-0">
+        <div className="drag-region flex items-center gap-2 px-3 shrink-0 pt-2" style={{ minHeight: '40px' }}>
+          {!collapsed && (
+            <div className="relative flex-1 no-drag">
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Rechercher..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 bg-dark-800 border border-dark-600 rounded-md text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-accent transition-colors"
+              />
+            </div>
+          )}
           <button
             onClick={onToggleCollapse}
-            className="no-drag p-1.5 rounded hover:bg-dark-700 text-gray-400 hover:text-gray-200 transition-colors"
+            className="no-drag p-1.5 rounded hover:bg-dark-700 text-gray-400 hover:text-gray-200 transition-colors shrink-0 ml-auto"
             title={collapsed ? 'Développer' : 'Réduire'}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -96,22 +110,6 @@ export default function Sidebar({
 
         {!collapsed && (
           <>
-            {/* Search */}
-            <div className="p-3 shrink-0">
-              <div className="relative">
-                <svg className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Rechercher..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 bg-dark-800 border border-dark-600 rounded-md text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-accent transition-colors"
-                />
-              </div>
-            </div>
-
             {/* Server list */}
             <div className="flex-1 overflow-y-auto px-2">
               {serversByGroup.map(({ group, servers: groupServers }) => (
