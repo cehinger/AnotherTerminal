@@ -1,8 +1,20 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
+import { SearchAddon } from '@xterm/addon-search';
 import { TerminalTab } from '../App';
+
+const isMac = navigator.platform.toUpperCase().includes('MAC');
+
+const searchDecorations = {
+  matchBackground: '#6366f133',
+  matchBorder: '#6366f1',
+  matchOverviewRuler: '#6366f188',
+  activeMatchBackground: '#6366f166',
+  activeMatchBorder: '#818cf8',
+  activeMatchColorOverviewRuler: '#818cf8',
+};
 
 interface TerminalTabsProps {
   paneId: string;
@@ -153,6 +165,10 @@ function TerminalView({ tab, isVisible }: { tab: TerminalTab; isVisible: boolean
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const searchAddonRef = useRef<SearchAddon | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (!terminalRef.current) {
@@ -196,10 +212,22 @@ function TerminalView({ tab, isVisible }: { tab: TerminalTab; isVisible: boolean
 
     const fitAddon = new FitAddon();
     const webLinksAddon = new WebLinksAddon();
+    const searchAddon = new SearchAddon();
 
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
-    
+    terminal.loadAddon(searchAddon);
+    searchAddonRef.current = searchAddon;
+
+    terminal.attachCustomKeyEventHandler((e) => {
+      const searchKey = isMac ? e.metaKey : e.ctrlKey;
+      if (searchKey && e.key === 'f' && e.type === 'keydown') {
+        setShowSearch(true);
+        return false;
+      }
+      return true;
+    });
+
     terminal.open(terminalRef.current);
     console.log(`[TerminalView] ✅ Terminal opened for ${tab.id}`);
     
@@ -276,21 +304,73 @@ function TerminalView({ tab, isVisible }: { tab: TerminalTab; isVisible: boolean
     }
   }, [tab.status, tab.error]);
 
+  const closeSearch = () => {
+    searchAddonRef.current?.clearDecorations();
+    setShowSearch(false);
+    setSearchQuery('');
+  };
+
+  const handleFindNext = () => {
+    if (searchAddonRef.current && searchQuery) {
+      searchAddonRef.current.findNext(searchQuery, { decorations: searchDecorations });
+    }
+  };
+
+  const handleFindPrevious = () => {
+    if (searchAddonRef.current && searchQuery) {
+      searchAddonRef.current.findPrevious(searchQuery, { decorations: searchDecorations });
+    }
+  };
+
   return (
     <div
-      ref={terminalRef}
-      className={`terminal-container ${isVisible ? 'block' : 'hidden'}`}
-      style={{ 
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        width: '100%', 
-        height: '100%',
-        overflow: 'hidden'
-      }}
-    />
+      className={isVisible ? 'block' : 'hidden'}
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}
+    >
+      <div
+        ref={terminalRef}
+        className="terminal-container"
+        style={{ width: '100%', height: '100%' }}
+      />
+      {showSearch && (
+        <div className="absolute top-2 right-2 z-50 flex items-center gap-1 bg-dark-800 border border-dark-600 rounded-md shadow-lg px-2 py-1.5">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={e => {
+              const q = e.target.value;
+              setSearchQuery(q);
+              if (searchAddonRef.current && q) {
+                searchAddonRef.current.findNext(q, { incremental: true, decorations: searchDecorations });
+              }
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Escape') { closeSearch(); }
+              else if (e.key === 'Enter') { e.shiftKey ? handleFindPrevious() : handleFindNext(); }
+            }}
+            placeholder="Rechercher..."
+            className="bg-transparent text-gray-200 text-sm outline-none w-48 placeholder-gray-600"
+            autoFocus
+          />
+          <button onClick={handleFindPrevious} title="Précédent (Shift+Entrée)" className="p-1 rounded text-gray-400 hover:text-gray-100 hover:bg-dark-700">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+            </svg>
+          </button>
+          <button onClick={handleFindNext} title="Suivant (Entrée)" className="p-1 rounded text-gray-400 hover:text-gray-100 hover:bg-dark-700">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          <button onClick={closeSearch} title="Fermer (Échap)" className="p-1 rounded text-gray-400 hover:text-gray-100 hover:bg-dark-700">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

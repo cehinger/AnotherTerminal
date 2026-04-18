@@ -32,6 +32,19 @@ Si c'est `undefined`, le preload script n'est pas chargé correctement.
 
 ### Problèmes courants
 
+#### macOS — « AnotherTerminal est endommagé et ne peut pas être ouvert »
+
+L'app n'est pas signée avec un certificat Apple Developer. macOS applique un attribut de quarantaine lors du téléchargement ou du remplacement de l'app.
+
+Fix :
+```bash
+xattr -cr /Applications/AnotherTerminal.app
+```
+
+Ensuite relancer l'app normalement.
+
+
+
 #### Terminal noir / rien ne s'affiche
 
 1. Vérifiez que `window.electronAPI` existe (voir ci-dessus)
