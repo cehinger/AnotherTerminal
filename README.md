@@ -8,6 +8,12 @@ Un gestionnaire de connexions SSH léger, multiplateforme, minimaliste et open s
 ![Version](https://img.shields.io/badge/version-0.3.0--alpha.1-orange)
 ![License](https://img.shields.io/badge/License-GPL--3.0-blue)
 
+## ⚠️ Certificat
+L'application n'étant qu'en Alpha, elle n'est pas signée avec un certificat Apple Developer.
+MacOS Gatekeeper bloque donc l'app après installation.
+La solution pour l'ouvrir quand même est de lancer cette commande post instalaltion via votre terminal :
+`xattr -cr /Applications/AnotherTerminal.app`
+
 ## Fonctionnalités
 
 ### 🔐 Sécurité
