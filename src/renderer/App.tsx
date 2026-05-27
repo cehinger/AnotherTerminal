@@ -11,7 +11,7 @@ export interface TerminalTab {
   serverId: string;
   serverAlias: string;
   serverHost: string;
-  status: 'connecting' | 'connected' | 'disconnected' | 'error';
+  status: 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting';
   error?: string;
 }
 
@@ -187,13 +187,16 @@ export default function App() {
             : tab
         ),
       })));
+      if (status === 'connected') {
+        loadData();
+      }
     });
 
     return () => {
       cleanupData();
       cleanupStatus();
     };
-  }, []);
+  }, [loadData]);
 
   const handleConnect = useCallback((server: ServerConfig) => {
     console.log('Connecting to server:', server.alias, server.host);
@@ -370,6 +373,40 @@ export default function App() {
     loadData();
   };
 
+  const handleDuplicateServer = async (id: string) => {
+    try {
+      await window.electronAPI.duplicateServer(id);
+      loadData();
+    } catch (err) {
+      console.error('[App] Duplicate server failed:', err);
+    }
+  };
+
+  const handleReorderServers = (orderedIds: string[]) => {
+    setServers(prev => {
+      const map = new Map(prev.map(s => [s.id, s]));
+      const reordered = orderedIds.map(id => map.get(id)).filter(Boolean) as typeof prev;
+      const rest = prev.filter(s => !orderedIds.includes(s.id));
+      return [...reordered, ...rest];
+    });
+    window.electronAPI.reorderServers(orderedIds);
+  };
+
+  const handleReorderGroups = (orderedNames: string[]) => {
+    setGroups(prev => {
+      const map = new Map(prev.map(g => [g.name, g]));
+      const reordered = orderedNames.map(n => map.get(n)).filter(Boolean) as typeof prev;
+      const rest = prev.filter(g => !orderedNames.includes(g.name));
+      return [...reordered, ...rest];
+    });
+    window.electronAPI.reorderGroups(orderedNames);
+  };
+
+  const handleMoveServerToGroup = (serverId: string, groupName: string) => {
+    setServers(prev => prev.map(s => s.id === serverId ? { ...s, group: groupName } : s));
+    window.electronAPI.moveServerToGroup(serverId, groupName);
+  };
+
   const handleSaveServer = async (server: ServerConfig) => {
     if (editingServer) {
       await window.electronAPI.updateServer(server);
@@ -416,6 +453,10 @@ export default function App() {
         onAddServer={handleAddServer}
         onEditServer={handleEditServer}
         onDeleteServer={handleDeleteServer}
+        onDuplicateServer={handleDuplicateServer}
+        onReorderServers={handleReorderServers}
+        onReorderGroups={handleReorderGroups}
+        onMoveServerToGroup={handleMoveServerToGroup}
         onAddGroup={async (group) => {
           const updated = await window.electronAPI.addGroup(group);
           setGroups(updated);

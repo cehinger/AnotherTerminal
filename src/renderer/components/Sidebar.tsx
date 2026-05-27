@@ -10,9 +10,13 @@ interface SidebarProps {
   onAddServer: () => void;
   onEditServer: (server: ServerConfig) => void;
   onDeleteServer: (id: string) => void;
+  onDuplicateServer: (id: string) => void;
   onAddGroup: (group: ServerGroup) => void;
   onDeleteGroup: (name: string) => void;
   onOpenSettings: () => void;
+  onReorderServers: (orderedIds: string[]) => void;
+  onReorderGroups: (orderedNames: string[]) => void;
+  onMoveServerToGroup: (serverId: string, groupName: string) => void;
 }
 
 export default function Sidebar({
@@ -24,15 +28,39 @@ export default function Sidebar({
   onAddServer,
   onEditServer,
   onDeleteServer,
+  onDuplicateServer,
   onAddGroup,
   onDeleteGroup,
   onOpenSettings,
+  onReorderServers,
+  onReorderGroups,
+  onMoveServerToGroup,
 }: SidebarProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showGroupInput, setShowGroupInput] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; server: ServerConfig } | null>(null);
+
+  // Drag & Drop state
+  const [draggedServerId, setDraggedServerId] = useState<string | null>(null);
+  const [draggedGroupName, setDraggedGroupName] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<
+    | { type: 'server'; id: string; half: 'top' | 'bottom' }
+    | { type: 'group'; name: string; mode: 'before' | 'after' | 'into' }
+    | null
+  >(null);
+
+  const getVerticalHalf = (e: React.DragEvent): 'top' | 'bottom' => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    return e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom';
+  };
+
+  const clearDragState = () => {
+    setDraggedServerId(null);
+    setDraggedGroupName(null);
+    setDropTarget(null);
+  };
 
   const toggleGroup = (name: string) => {
     setCollapsedGroups(prev => {
@@ -114,8 +142,68 @@ export default function Sidebar({
             <div className="flex-1 overflow-y-auto px-2">
               {serversByGroup.map(({ group, servers: groupServers }) => (
                 <div key={group.name} className="mb-1">
-                  {/* Group header */}
-                  <div className="flex items-center justify-between px-2 py-1.5 group">
+                  {/* Group header — draggable for group reordering, drop target for server moves */}
+                  <div
+                    className={`relative flex items-center justify-between px-2 py-1.5 group cursor-grab active:cursor-grabbing ${
+                      draggedGroupName === group.name ? 'opacity-40' : ''
+                    } ${
+                      dropTarget?.type === 'group' && dropTarget.name === group.name && dropTarget.mode === 'into'
+                        ? 'rounded bg-accent/10'
+                        : ''
+                    }`}
+                    draggable={!searchQuery}
+                    onDragStart={e => {
+                      if (searchQuery) return;
+                      e.dataTransfer.effectAllowed = 'move';
+                      setDraggedGroupName(group.name);
+                      setDraggedServerId(null);
+                    }}
+                    onDragEnd={clearDragState}
+                    onDragOver={e => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      if (draggedGroupName && draggedGroupName !== group.name) {
+                        const half = getVerticalHalf(e);
+                        setDropTarget({ type: 'group', name: group.name, mode: half === 'top' ? 'before' : 'after' });
+                      } else if (draggedServerId) {
+                        const src = servers.find(s => s.id === draggedServerId);
+                        if (src && src.group !== group.name) {
+                          setDropTarget({ type: 'group', name: group.name, mode: 'into' });
+                        }
+                      }
+                    }}
+                    onDragLeave={e => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                        setDropTarget(null);
+                      }
+                    }}
+                    onDrop={e => {
+                      e.preventDefault();
+                      if (draggedGroupName && draggedGroupName !== group.name) {
+                        const half = getVerticalHalf(e);
+                        const allNames = groups.map(g => g.name);
+                        const filtered = allNames.filter(n => n !== draggedGroupName);
+                        const targetIdx = filtered.indexOf(group.name);
+                        const insertIdx = half === 'top' ? targetIdx : targetIdx + 1;
+                        filtered.splice(insertIdx, 0, draggedGroupName);
+                        onReorderGroups(filtered);
+                      } else if (draggedServerId) {
+                        const src = servers.find(s => s.id === draggedServerId);
+                        if (src && src.group !== group.name) {
+                          onMoveServerToGroup(draggedServerId, group.name);
+                        }
+                      }
+                      clearDragState();
+                    }}
+                  >
+                    {/* Drop indicator — before group */}
+                    {dropTarget?.type === 'group' && dropTarget.name === group.name && dropTarget.mode === 'before' && (
+                      <div className="absolute top-0 inset-x-0 h-0.5 bg-accent rounded-full pointer-events-none" />
+                    )}
+                    {/* Drop indicator — after group */}
+                    {dropTarget?.type === 'group' && dropTarget.name === group.name && dropTarget.mode === 'after' && (
+                      <div className="absolute bottom-0 inset-x-0 h-0.5 bg-accent rounded-full pointer-events-none" />
+                    )}
                     <button
                       onClick={() => toggleGroup(group.name)}
                       className="flex items-center gap-1.5 text-xs font-medium text-gray-400 uppercase tracking-wider hover:text-gray-200 transition-colors"
@@ -151,6 +239,52 @@ export default function Sidebar({
                           server={server}
                           onConnect={onConnect}
                           onContextMenu={handleContextMenu}
+                          isDragging={draggedServerId === server.id}
+                          dropIndicator={
+                            dropTarget?.type === 'server' && dropTarget.id === server.id
+                              ? dropTarget.half
+                              : null
+                          }
+                          onDragStart={e => {
+                            if (searchQuery) return;
+                            e.dataTransfer.effectAllowed = 'move';
+                            setDraggedServerId(server.id);
+                            setDraggedGroupName(null);
+                          }}
+                          onDragEnd={clearDragState}
+                          onDragOver={e => {
+                            if (!draggedServerId || draggedServerId === server.id) return;
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                            const half = getVerticalHalf(e);
+                            setDropTarget({ type: 'server', id: server.id, half });
+                          }}
+                          onDragLeave={e => {
+                            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                              setDropTarget(null);
+                            }
+                          }}
+                          onDrop={e => {
+                            e.preventDefault();
+                            if (!draggedServerId || draggedServerId === server.id) { clearDragState(); return; }
+                            const src = servers.find(s => s.id === draggedServerId);
+                            const tgt = servers.find(s => s.id === server.id);
+                            if (!src || !tgt) { clearDragState(); return; }
+                            const currentHalf =
+                              dropTarget?.type === 'server' && dropTarget.id === server.id
+                                ? dropTarget.half
+                                : 'bottom';
+                            const allIds = servers.map(s => s.id);
+                            const filtered = allIds.filter(id => id !== draggedServerId);
+                            const tgtIdx = filtered.indexOf(server.id);
+                            const insertIdx = currentHalf === 'top' ? tgtIdx : tgtIdx + 1;
+                            filtered.splice(insertIdx, 0, draggedServerId);
+                            if (src.group !== tgt.group) {
+                              onMoveServerToGroup(draggedServerId, tgt.group);
+                            }
+                            onReorderServers(filtered);
+                            clearDragState();
+                          }}
                         />
                       ))}
                       {groupServers.length === 0 && (
@@ -297,8 +431,15 @@ export default function Sidebar({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
               Modifier
-            </button>
-            <div className="border-t border-dark-600 my-1" />
+            </button>            <button
+              onClick={() => { onDuplicateServer(contextMenu.server.id); setContextMenu(null); }}
+              className="w-full px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-dark-700 flex items-center gap-2"
+            >
+              <svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              Dupliquer
+            </button>            <div className="border-t border-dark-600 my-1" />
             <button
               onClick={() => { onDeleteServer(contextMenu.server.id); setContextMenu(null); }}
               className="w-full px-3 py-1.5 text-left text-sm text-red-400 hover:bg-dark-700 flex items-center gap-2"
@@ -316,39 +457,88 @@ export default function Sidebar({
 }
 
 // Individual server item
+function formatLastConnected(isoDate: string): string {
+  const date = new Date(isoDate);
+  const diffMs = Date.now() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'à l\'instant';
+  if (diffMins < 60) return `il y a ${diffMins} min`;
+  if (diffHours < 24) return `il y a ${diffHours}h`;
+  if (diffDays < 7) return `il y a ${diffDays}j`;
+  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
 function ServerItem({
   server,
   onConnect,
   onContextMenu,
+  isDragging,
+  dropIndicator,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }: {
   server: ServerConfig;
   onConnect: (server: ServerConfig) => void;
   onContextMenu: (e: React.MouseEvent, server: ServerConfig) => void;
+  isDragging?: boolean;
+  dropIndicator?: 'top' | 'bottom' | null;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragLeave?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
 }) {
   return (
-    <button
-      onClick={() => onConnect(server)}
-      onContextMenu={e => onContextMenu(e, server)}
-      className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-dark-800 group transition-colors text-left"
+    <div
+      className="relative"
+      draggable={!!onDragStart}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
     >
-      <div
-        className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0"
-        style={{ backgroundColor: server.color || '#6366f1', color: 'white' }}
+      {dropIndicator === 'top' && (
+        <div className="absolute top-0 inset-x-1 h-0.5 bg-accent rounded-full pointer-events-none z-10" />
+      )}
+      {dropIndicator === 'bottom' && (
+        <div className="absolute bottom-0 inset-x-1 h-0.5 bg-accent rounded-full pointer-events-none z-10" />
+      )}
+      <button
+        onClick={() => onConnect(server)}
+        onContextMenu={e => onContextMenu(e, server)}
+        className={`w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-dark-800 group transition-colors text-left ${isDragging ? 'opacity-40' : ''}`}
       >
-        {server.icon || server.alias.charAt(0).toUpperCase()}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-gray-200 truncate">{server.alias}</div>
-        <div className="text-xs text-gray-500 truncate">
-          {server.username}@{server.host}:{server.port}
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold shrink-0"
+          style={{ backgroundColor: server.color || '#71C8F4', color: 'white' }}
+        >
+          {server.icon || server.alias.charAt(0).toUpperCase()}
         </div>
-      </div>
-      <svg
-        className="w-4 h-4 text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-        fill="none" stroke="currentColor" viewBox="0 0 24 24"
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-      </svg>
-    </button>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-gray-200 truncate">{server.alias}</div>
+          <div className="text-xs text-gray-500 truncate">
+            {server.username}@{server.host}:{server.port}
+          </div>
+          {server.lastConnectedAt && (
+            <div className="text-xs text-gray-600 truncate mt-0.5">
+              {formatLastConnected(server.lastConnectedAt)}
+            </div>
+          )}
+        </div>
+        <svg
+          className="w-4 h-4 text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      </button>
+    </div>
   );
 }

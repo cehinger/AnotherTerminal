@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { app } from 'electron';
 import { AppData, ServerConfig, ServerGroup, AppConfig } from '../shared/types';
 import { encrypt, decrypt, hashPassword, verifyPassword } from './crypto';
@@ -14,7 +15,7 @@ function getDefaultData(): AppData {
   return {
     version: '1.0.0',
     config: {
-      groups: [{ name: 'Par défaut', color: '#6366f1' }],
+      groups: [{ name: 'Par défaut', color: '#71C8F4' }],
     },
     servers: [],
   };
@@ -157,6 +158,80 @@ export function deleteServer(id: string): void {
   const data = loadData();
   data.servers = data.servers.filter(s => s.id !== id);
   saveData(data);
+}
+
+export function updateLastConnected(id: string): void {
+  const data = loadData();
+  const server = data.servers.find(s => s.id === id);
+  if (server) {
+    server.lastConnectedAt = new Date().toISOString();
+    saveData(data);
+  }
+}
+
+export function duplicateServer(id: string): ServerConfig {
+  const data = loadData();
+  const original = data.servers.find(s => s.id === id);
+  if (!original) throw new Error('Serveur introuvable');
+  const now = new Date().toISOString();
+  // Keep encrypted credentials as-is in the stored copy
+  const copy: ServerConfig = {
+    ...original,
+    id: randomUUID(),
+    alias: `Copie de ${original.alias}`,
+    createdAt: now,
+    updatedAt: now,
+    lastConnectedAt: undefined,
+  };
+  data.servers.push(copy);
+  saveData(data);
+  const decrypted = decryptServer(copy);
+  return {
+    ...decrypted,
+    password: decrypted.password ? '••••••••' : undefined,
+    passphrase: decrypted.passphrase ? '••••••••' : undefined,
+  };
+}
+
+export function reorderServers(orderedIds: string[]): void {
+  const data = loadData();
+  const map = new Map(data.servers.map(s => [s.id, s]));
+  const reordered: ServerConfig[] = [];
+  for (const id of orderedIds) {
+    const s = map.get(id);
+    if (s) reordered.push(s);
+  }
+  // Safety: keep any servers not in orderedIds
+  for (const s of data.servers) {
+    if (!orderedIds.includes(s.id)) reordered.push(s);
+  }
+  data.servers = reordered;
+  saveData(data);
+}
+
+export function reorderGroups(orderedNames: string[]): void {
+  const data = loadData();
+  const map = new Map(data.config.groups.map(g => [g.name, g]));
+  const reordered: ServerGroup[] = [];
+  for (const name of orderedNames) {
+    const g = map.get(name);
+    if (g) reordered.push(g);
+  }
+  for (const g of data.config.groups) {
+    if (!orderedNames.includes(g.name)) reordered.push(g);
+  }
+  data.config.groups = reordered;
+  saveData(data);
+}
+
+export function moveServerToGroup(id: string, groupName: string): void {
+  const data = loadData();
+  const server = data.servers.find(s => s.id === id);
+  if (server) {
+    server.group = groupName;
+    server.updatedAt = new Date().toISOString();
+    saveData(data);
+  }
 }
 
 // Group operations

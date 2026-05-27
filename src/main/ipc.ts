@@ -22,6 +22,20 @@ export function registerIPC(getMainWindow: () => BrowserWindow | null): void {
     return true;
   });
 
+  ipcMain.handle(IPC_CHANNELS.DUPLICATE_SERVER, (_, id: string) => {
+    return store.duplicateServer(id);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.REORDER_SERVERS, (_, orderedIds: string[]) => {
+    store.reorderServers(orderedIds);
+    return true;
+  });
+
+  ipcMain.handle(IPC_CHANNELS.MOVE_SERVER_GROUP, (_, id: string, groupName: string) => {
+    store.moveServerToGroup(id, groupName);
+    return true;
+  });
+
   // Group management
   ipcMain.handle(IPC_CHANNELS.GET_GROUPS, () => {
     return store.getGroups();
@@ -37,6 +51,11 @@ export function registerIPC(getMainWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle(IPC_CHANNELS.DELETE_GROUP, (_, name: string) => {
     return store.deleteGroup(name);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.REORDER_GROUPS, (_, orderedNames: string[]) => {
+    store.reorderGroups(orderedNames);
+    return true;
   });
 
   // SSH connections
@@ -76,6 +95,10 @@ export function registerIPC(getMainWindow: () => BrowserWindow | null): void {
   });
 
   ssh.setOnStatus((sessionId, status, error) => {
+    if (status === 'connected') {
+      const serverId = ssh.getServerId(sessionId);
+      if (serverId) store.updateLastConnected(serverId);
+    }
     const mainWindow = getMainWindow();
     console.log(`[IPC] Sending SSH status to renderer: session=${sessionId}, status=${status}`);
     if (mainWindow && !mainWindow.isDestroyed()) {

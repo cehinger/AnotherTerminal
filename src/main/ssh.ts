@@ -4,6 +4,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
+const MAX_RECONNECT_ATTEMPTS = 10;
+const MAX_RECONNECT_DELAY_MS = 30_000;
+
 interface SSHSession {
   client: Client;
   stream: ClientChannel | null;
@@ -13,6 +16,11 @@ interface SSHSession {
   connectionType: 'ssh' | 'sftp';
   currentPath?: string;
   sftpBuffer?: string;
+  // Auto-reconnect
+  serverConfig: ServerConfig;
+  manualDisconnect: boolean;
+  reconnectAttempts: number;
+  reconnectTimer: ReturnType<typeof setTimeout> | null;
 }
 
 const sessions: Map<string, SSHSession> = new Map();
@@ -39,137 +47,177 @@ function emitStatus(sessionId: string, status: SSHConnectionStatus, error?: stri
   onStatusCallback?.(sessionId, status, error);
 }
 
-export function connectSSH(sessionId: string, server: ServerConfig): Promise<void> {
-  return new Promise((resolve, reject) => {
-    console.log(`[${server.connectionType.toUpperCase()}] Connecting to ${server.username}@${server.host}:${server.port} (session: ${sessionId})`);
-    const client = new Client();
+function scheduleReconnect(sessionId: string): void {
+  const session = sessions.get(sessionId);
+  if (!session || session.manualDisconnect) {
+    if (session) sessions.delete(sessionId);
+    return;
+  }
 
-    const session: SSHSession = {
-      client,
-      stream: null,
-      sftp: null,
-      status: 'connecting',
-      serverId: server.id,
-      connectionType: server.connectionType,
-      currentPath: '.',
-      sftpBuffer: '',
-    };
-    sessions.set(sessionId, session);
-    emitStatus(sessionId, 'connecting');
+  // SFTP reconnect not supported — requires user interaction
+  if (session.connectionType === 'sftp') {
+    emitStatus(sessionId, 'disconnected');
+    sessions.delete(sessionId);
+    return;
+  }
 
-    const connectConfig: any = {
-      host: server.host,
-      port: server.port || 22,
-      username: server.username,
-      readyTimeout: 10000,
-      keepaliveInterval: 30000,
-      keepaliveCountMax: 5,
-    };
+  session.reconnectAttempts += 1;
 
-    if (server.authType === 'key' && server.privateKeyPath) {
-      try {
-        const expandedPath = server.privateKeyPath.replace(/^~(?=$|\/|\\)/, os.homedir());
-        connectConfig.privateKey = fs.readFileSync(expandedPath);
-        if (server.passphrase) {
-          connectConfig.passphrase = server.passphrase;
-        }
-      } catch (err: any) {
-        emitStatus(sessionId, 'error', `Cannot read key file: ${err.message}`);
-        reject(err);
-        return;
+  if (session.reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+    emitStatus(sessionId, 'error', 'Nombre maximum de tentatives de reconnexion atteint');
+    sessions.delete(sessionId);
+    return;
+  }
+
+  const delay = Math.min(1000 * Math.pow(2, session.reconnectAttempts - 1), MAX_RECONNECT_DELAY_MS);
+  const delaySeconds = Math.round(delay / 1000);
+  emitStatus(
+    sessionId,
+    'reconnecting',
+    `Tentative ${session.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} dans ${delaySeconds}s`,
+  );
+
+  session.reconnectTimer = setTimeout(() => {
+    const s = sessions.get(sessionId);
+    if (!s || s.manualDisconnect) return;
+    s.stream = null;
+    s.sftp = null;
+    s.client = new Client();
+    doConnect(sessionId, s);
+  }, delay);
+}
+
+function doConnect(sessionId: string, session: SSHSession): void {
+  const { serverConfig: server, client } = session;
+  emitStatus(sessionId, 'connecting');
+
+  const connectConfig: any = {
+    host: server.host,
+    port: server.port || 22,
+    username: server.username,
+    readyTimeout: 10000,
+    keepaliveInterval: 30000,
+    keepaliveCountMax: 5,
+  };
+
+  if (server.authType === 'key' && server.privateKeyPath) {
+    try {
+      const expandedPath = server.privateKeyPath.replace(/^~(?=$|\/|\\)/, os.homedir());
+      connectConfig.privateKey = fs.readFileSync(expandedPath);
+      if (server.passphrase) {
+        connectConfig.passphrase = server.passphrase;
       }
-    } else if (server.authType === 'password' && server.password) {
-      connectConfig.password = server.password;
+    } catch (err: any) {
+      emitStatus(sessionId, 'error', `Cannot read key file: ${err.message}`);
+      sessions.delete(sessionId);
+      return;
     }
+  } else if (server.authType === 'password' && server.password) {
+    connectConfig.password = server.password;
+  }
 
-    client.on('ready', () => {
-      // Handle SFTP connections differently
-      if (server.connectionType === 'sftp') {
-        client.sftp((err, sftp) => {
-          if (err) {
-            emitStatus(sessionId, 'error', err.message);
-            reject(err);
-            return;
+  // Guard against duplicate close/error events triggering multiple reconnects
+  let closeHandled = false;
+  const handleClose = () => {
+    if (closeHandled) return;
+    closeHandled = true;
+    if (session.manualDisconnect) {
+      emitStatus(sessionId, 'disconnected');
+      sessions.delete(sessionId);
+    } else {
+      scheduleReconnect(sessionId);
+    }
+  };
+
+  client.once('ready', () => {
+    if (server.connectionType === 'sftp') {
+      client.sftp((err, sftp) => {
+        if (err) {
+          emitStatus(sessionId, 'error', err.message);
+          handleClose();
+          return;
+        }
+
+        session.sftp = sftp;
+        session.reconnectAttempts = 0;
+        emitStatus(sessionId, 'connected');
+
+        sftp.realpath('.', (err, absPath) => {
+          if (!err && absPath) {
+            session.currentPath = absPath;
           }
 
-          session.sftp = sftp;
-          emitStatus(sessionId, 'connected');
-
-          // Get initial working directory
-          sftp.realpath('.', (err, absPath) => {
-            if (!err && absPath) {
-              session.currentPath = absPath;
-            }
-            
-            // Send welcome message
-            const welcomeMsg = `\x1b[32m✓ Connexion SFTP établie\x1b[0m\r\n` +
-              `Répertoire: ${session.currentPath}\r\n` +
-              `Commandes disponibles: ls, cd, pwd, get, put, mkdir, rm, help, exit\r\n\r\n` +
-              `sftp> `;
-            onDataCallback?.(sessionId, welcomeMsg);
-          });
-
-          resolve();
+          const welcomeMsg =
+            `\x1b[32m✓ Connexion SFTP établie\x1b[0m\r\n` +
+            `Répertoire: ${session.currentPath}\r\n` +
+            `Commandes disponibles: ls, cd, pwd, get, put, mkdir, rm, help, exit\r\n\r\n` +
+            `sftp> `;
+          onDataCallback?.(sessionId, welcomeMsg);
         });
-      } else {
-        // Standard SSH shell connection
-        client.shell(
-          {
-            term: 'xterm-256color',
-            cols: 120,
-            rows: 30,
-          },
-          (err, stream) => {
-            if (err) {
-              emitStatus(sessionId, 'error', err.message);
-              reject(err);
-              return;
-            }
+      });
+    } else {
+      client.shell({ term: 'xterm-256color', cols: 120, rows: 30 }, (err, stream) => {
+        if (err) {
+          emitStatus(sessionId, 'error', err.message);
+          handleClose();
+          return;
+        }
 
-            session.stream = stream;
-            emitStatus(sessionId, 'connected');
+        session.stream = stream;
+        session.reconnectAttempts = 0;
+        emitStatus(sessionId, 'connected');
 
-            stream.on('data', (data: Buffer) => {
-              const dataStr = data.toString('utf-8');
-              console.log(`[SSH] Received data from ${sessionId}: ${dataStr.length} bytes`);
-              onDataCallback?.(sessionId, dataStr);
-            });
+        stream.on('data', (data: Buffer) => {
+          console.log(`[SSH] Received data from ${sessionId}: ${data.length} bytes`);
+          onDataCallback?.(sessionId, data.toString('utf-8'));
+        });
 
-            stream.stderr.on('data', (data: Buffer) => {
-              const dataStr = data.toString('utf-8');
-              console.log(`[SSH] Received stderr from ${sessionId}: ${dataStr.length} bytes`);
-              onDataCallback?.(sessionId, dataStr);
-            });
+        stream.stderr.on('data', (data: Buffer) => {
+          console.log(`[SSH] Received stderr from ${sessionId}: ${data.length} bytes`);
+          onDataCallback?.(sessionId, data.toString('utf-8'));
+        });
 
-            stream.on('close', () => {
-              emitStatus(sessionId, 'disconnected');
-              sessions.delete(sessionId);
-            });
-
-            resolve();
-          }
-        );
-      }
-    });
-
-    client.on('error', (err) => {
-      emitStatus(sessionId, 'error', err.message);
-      sessions.delete(sessionId);
-      reject(err);
-    });
-
-    client.on('end', () => {
-      emitStatus(sessionId, 'disconnected');
-      sessions.delete(sessionId);
-    });
-
-    client.on('close', () => {
-      emitStatus(sessionId, 'disconnected');
-      sessions.delete(sessionId);
-    });
-
-    client.connect(connectConfig);
+        stream.on('close', () => handleClose());
+      });
+    }
   });
+
+  client.once('error', () => handleClose());
+  client.once('close', () => handleClose());
+
+  client.connect(connectConfig);
+}
+
+export function connectSSH(sessionId: string, server: ServerConfig): Promise<void> {
+  console.log(`[${server.connectionType.toUpperCase()}] Connecting to ${server.username}@${server.host}:${server.port} (session: ${sessionId})`);
+
+  // Validate key file existence synchronously before creating the session
+  if (server.authType === 'key' && server.privateKeyPath) {
+    const expandedPath = server.privateKeyPath.replace(/^~(?=$|\/|\\)/, os.homedir());
+    if (!fs.existsSync(expandedPath)) {
+      return Promise.reject(new Error(`Fichier de clé introuvable : ${expandedPath}`));
+    }
+  }
+
+  const session: SSHSession = {
+    client: new Client(),
+    stream: null,
+    sftp: null,
+    status: 'connecting',
+    serverId: server.id,
+    connectionType: server.connectionType,
+    currentPath: '.',
+    sftpBuffer: '',
+    serverConfig: server,
+    manualDisconnect: false,
+    reconnectAttempts: 0,
+    reconnectTimer: null,
+  };
+  sessions.set(sessionId, session);
+
+  doConnect(sessionId, session);
+  // Resolve immediately — actual connection state is communicated via status events
+  return Promise.resolve();
 }
 
 export function writeToSSH(sessionId: string, data: string): void {
@@ -392,12 +440,21 @@ export function resizeSSH(sessionId: string, cols: number, rows: number): void {
 export function disconnectSSH(sessionId: string): void {
   const session = sessions.get(sessionId);
   if (session) {
+    session.manualDisconnect = true;
+    if (session.reconnectTimer !== null) {
+      clearTimeout(session.reconnectTimer);
+      session.reconnectTimer = null;
+    }
     if (session.sftp) {
       session.sftp.end();
     }
     session.client.end();
     sessions.delete(sessionId);
   }
+}
+
+export function getServerId(sessionId: string): string | undefined {
+  return sessions.get(sessionId)?.serverId;
 }
 
 export function disconnectAll(): void {

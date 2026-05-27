@@ -8,12 +8,12 @@ import { TerminalTab } from '../App';
 const isMac = navigator.platform.toUpperCase().includes('MAC');
 
 const searchDecorations = {
-  matchBackground: '#6366f133',
-  matchBorder: '#6366f1',
-  matchOverviewRuler: '#6366f188',
-  activeMatchBackground: '#6366f166',
-  activeMatchBorder: '#818cf8',
-  activeMatchColorOverviewRuler: '#818cf8',
+  matchBackground: '#71C8F433',
+  matchBorder: '#71C8F4',
+  matchOverviewRuler: '#71C8F488',
+  activeMatchBackground: '#71C8F466',
+  activeMatchBorder: '#5ABFF1',
+  activeMatchColorOverviewRuler: '#5ABFF1',
 };
 
 interface TerminalTabsProps {
@@ -127,10 +127,11 @@ function TabButton({
   onDragStart: (e: React.MouseEvent) => void;
 }) {
   const statusColor = {
-    connecting: 'bg-yellow-500',
+    connecting: 'bg-yellow-500 animate-pulse',
     connected: 'bg-green-500',
     disconnected: 'bg-gray-500',
     error: 'bg-red-500',
+    reconnecting: 'bg-orange-400 animate-pulse',
   }[tab.status];
 
   return (
@@ -182,9 +183,9 @@ function TerminalView({ tab, isVisible }: { tab: TerminalTab; isVisible: boolean
       theme: {
         background: '#1a1b1f',
         foreground: '#e2e3e5',
-        cursor: '#6366f1',
+        cursor: '#71C8F4',
         cursorAccent: '#1a1b1f',
-        selectionBackground: '#6366f144',
+        selectionBackground: '#71C8F444',
         black: '#1a1b1f',
         red: '#ef4444',
         green: '#22c55e',
@@ -298,6 +299,9 @@ function TerminalView({ tab, isVisible }: { tab: TerminalTab; isVisible: boolean
     }
     if (tab.status === 'disconnected' && xtermRef.current) {
       xtermRef.current.writeln(`\r\n\x1b[1;33m⚡ Déconnecté\x1b[0m\r\n`);
+    }
+    if (tab.status === 'reconnecting' && xtermRef.current) {
+      xtermRef.current.writeln(`\r\n\x1b[1;33m↺ Reconnexion en cours... ${tab.error ?? ''}\x1b[0m\r\n`);
     }
     if (tab.status === 'connected' && xtermRef.current) {
       // Connection success is shown by the shell prompt

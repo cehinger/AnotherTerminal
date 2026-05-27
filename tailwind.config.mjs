@@ -18,9 +18,9 @@ export default {
           950: '#1a1b1f',
         },
         accent: {
-          DEFAULT: '#6366f1',
-          hover: '#818cf8',
-          dark: '#4f46e5',
+          DEFAULT: '#71C8F4',
+          hover: '#5ABFF1',
+          dark: '#39B2EF',
         },
       },
     },

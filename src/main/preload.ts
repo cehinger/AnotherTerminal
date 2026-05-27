@@ -11,6 +11,12 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SERVER, server),
   deleteServer: (id: string): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.DELETE_SERVER, id),
+  duplicateServer: (id: string): Promise<ServerConfig> =>
+    ipcRenderer.invoke(IPC_CHANNELS.DUPLICATE_SERVER, id),
+  reorderServers: (orderedIds: string[]): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.REORDER_SERVERS, orderedIds),
+  moveServerToGroup: (serverId: string, groupName: string): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MOVE_SERVER_GROUP, serverId, groupName),
 
   // Groups
   getGroups: (): Promise<ServerGroup[]> =>
@@ -21,6 +27,8 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS.UPDATE_GROUP, oldName, group),
   deleteGroup: (name: string): Promise<ServerGroup[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.DELETE_GROUP, name),
+  reorderGroups: (orderedNames: string[]): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.REORDER_GROUPS, orderedNames),
 
   // SSH
   sshConnect: (sessionId: string, serverId: string): Promise<boolean> =>

@@ -17,6 +17,7 @@ export interface ServerConfig {
   icon?: string;           // Emoji or icon
   createdAt: string;
   updatedAt: string;
+  lastConnectedAt?: string;
 }
 
 export interface ServerGroup {
@@ -50,12 +51,16 @@ export const IPC_CHANNELS = {
   ADD_SERVER: 'servers:add',
   UPDATE_SERVER: 'servers:update',
   DELETE_SERVER: 'servers:delete',
+  DUPLICATE_SERVER: 'servers:duplicate',
+  REORDER_SERVERS: 'servers:reorder',
+  MOVE_SERVER_GROUP: 'servers:move-group',
 
   // Group management
   GET_GROUPS: 'groups:get-all',
   ADD_GROUP: 'groups:add',
   UPDATE_GROUP: 'groups:update',
   DELETE_GROUP: 'groups:delete',
+  REORDER_GROUPS: 'groups:reorder',
 
   // SSH
   SSH_CONNECT: 'ssh:connect',
@@ -81,7 +86,7 @@ export const IPC_CHANNELS = {
   WINDOW_CLOSE: 'app:window-close',
 } as const;
 
-export type SSHConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+export type SSHConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting';
 
 export interface SSHStatusEvent {
   sessionId: string;
