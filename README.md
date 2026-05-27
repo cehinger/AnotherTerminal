@@ -219,16 +219,16 @@ Les contributions sont les bienvenues ! N'hésitez pas à :
 - [ ] SFTP : interface visuelle de gestion de fichiers (au lieu du mode CLI actuel)
 
 ### Intermédiaires
-- [ ] Reconnexion automatique en cas de déconnexion
+- [✔] Reconnexion automatique en cas de déconnexion
 - [ ] Historique des commandes
-- [ ] Duplication de serveurs
+- [✔] Duplication de serveurs
 - [ ] Bottombar de commandes personnalisées enregistrées par l'utilisateur
 - [ ] Macros/Scripts pour une automatisation de séquences de commandes
 - [ ] Import/export de configurations
 
 ### Mineures
-- [ ] Glisser-déposer pour réordonner les serveurs & groupes
-- [ ] Afficher la date et l'heure de la dernière connexion
+- [✔] Glisser-déposer pour réordonner les serveurs & groupes
+- [✔] Afficher la date et l'heure de la dernière connexion
 - [ ] Ajustement de la taille de la police
 - [ ] Thèmes personnalisables
 
